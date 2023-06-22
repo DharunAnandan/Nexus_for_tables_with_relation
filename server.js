@@ -1,48 +1,80 @@
 const { PrismaClient } = require('@prisma/client');
 const { queryType, mutationType, stringArg, makeSchema, objectType, nonNull, arg } = require('@nexus/schema');
 const { ApolloServer } = require('apollo-server');
+const DataLoader = require('dataloader');
+const { setArrayFields, setFields } = require('./dataloader');
 
 const prisma = new PrismaClient();
 
-const client = objectType({
-    name: 'client',
-    definition(t){
-        t.string('id');
-        t.string('name');
-        t.string('email');
-        t.list.field('profile', {
-            type: 'profile',
-            resolve: (parent,_args) => {
-                return prisma.client.findUnique({
-                    where: {
-                        id: parent.id || undefined
-                    },
-                })
-                .profile();
-            }
-        })
-    },
-});
 
-const profile = objectType({
+
+const clientLoader = new DataLoader(async (ids) => {
+    const clients = await prisma.client.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+    return setFields(clients,ids)
+  },{cache:true});
+  
+  const profileLoader = new DataLoader(async (ids) => {
+    const profiles = await prisma.profile.findMany({
+      where: {
+        client_id: {
+          in: ids,
+        },
+      },
+    });
+    const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+    return ids.map((id) => profiles_by_id.get(id));
+  });
+
+
+const profileListOfClientLoader =new DataLoader(async (ids) => {
+    const profiles = await prisma.profile.findMany({
+      where: {
+        client_id: {
+          in: ids,
+        },
+      },
+    });
+    return setArrayFields(profiles,ids,"client_id");
+  });
+
+  const client = objectType({
+    name: 'client',
+    definition(t) {
+      t.string('id');
+      t.string('name');
+      t.string('email');
+      t.list.field('profiles', {
+        type: 'profile',
+        resolve: (parent, _args, { loaders }) => {
+          return profileListOfClientLoader.load(parent.id);
+        
+
+        },
+      });
+    },
+  });
+  
+
+  const profile = objectType({
     name: 'profile',
     definition(t) {
-        t.string('id');
-        t.string('bio');
-        t.boolean('is_deleted');
-        t.field('client', {
-            type: 'client',
-            resolve: (parent, _args) => {
-                return prisma.profile.findUnique({
-                    where: {
-                        id: parent.id || undefined
-                    },
-                })
-                .client()
-            }
-        })
-    }
-})
+      t.string('id');
+      t.string('bio');
+      t.boolean('is_deleted');
+      t.field('client', {
+        type: 'client',
+        resolve: (parent, _args, { loaders }) => {
+          return clientLoader.load(parent.client_id);
+        },
+      });
+    },
+  });
 
 const Query = queryType({
     definition(t) {
@@ -57,8 +89,8 @@ const Query = queryType({
                         id: args.id,
                     }
                 });
-            }
-        })
+            },
+        });
 
         t.list.field('manyClients', {
             type: 'client',
@@ -268,7 +300,17 @@ const schema = makeSchema({
     types: [client, profile, Query, Mutation]
 });
 
-const server = new ApolloServer({ schema });
+const server = new ApolloServer({
+    schema,
+    context: () => ({
+      loaders: {
+        clientLoader,
+        profileLoader,
+      },
+    }),
+  });
+
+
 server.listen(5000, () => {
     console.log("running on 5000");
 });
