@@ -214,6 +214,44 @@ const Mutation = mutationType({
             }
         });
 
+        t.field('updateClient', {
+            type: 'client',
+            args: {
+                id: nonNull(stringArg()),
+                data: nonNull(stringArg()),
+            },
+            resolve: (_, args) => {
+                clientLoader.clear(args.id);
+                return prisma.client.update({
+                    where: {
+                        id: args.id,
+                    },
+                    data: {
+                        name: args.data
+                    },
+                })
+            }
+        })
+
+        t.field('updateProfile', {
+            type: 'profile',
+            args: {
+                id: nonNull(stringArg()),
+                data: nonNull(stringArg()),
+            },
+            resolve: (_, args) => {
+                profileLoader.clear(args.id);
+                return prisma.profile.update({
+                    where: {
+                        id: args.id,
+                    },
+                    data: {
+                        bio: args.data
+                    },
+                })
+            }
+        })
+
         t.field('upsert', {
             type: 'profile',
             args: {
@@ -278,6 +316,7 @@ const Mutation = mutationType({
 
         // })
     },
+    
 });
  //👇 rawQuery
 
