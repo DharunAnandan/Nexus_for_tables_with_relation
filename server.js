@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
-const { queryType, mutationType, stringArg, makeSchema, objectType, nonNull } = require('@nexus/schema');
+const { queryType, mutationType, stringArg, makeSchema, objectType, nonNull, arg } = require('@nexus/schema');
 const { ApolloServer } = require('apollo-server');
 
 const prisma = new PrismaClient();
@@ -29,6 +29,7 @@ const profile = objectType({
     definition(t) {
         t.string('id');
         t.string('bio');
+        t.boolean('is_deleted');
         t.field('client', {
             type: 'client',
             resolve: (parent, _args) => {
@@ -48,7 +49,7 @@ const Query = queryType({
         t.field('singleClient', {
             type: 'client',
             args: {
-                id: stringArg({required: true}),
+                id: nonNull(stringArg()),
             },
             resolve: (_, args) => {
                 return prisma.client.findUnique({
@@ -69,7 +70,7 @@ const Query = queryType({
         t.field('singleProfile', {
             type: 'profile',
             args: {
-                id: stringArg({required: true}),
+                id: nonNull(stringArg()),
             },
             resolve: (_, args) => {
                 return prisma.profile.findUnique({
@@ -94,8 +95,8 @@ const Mutation = mutationType({
         t.field('createClient', {
             type: 'client',
             args: {
-                name: stringArg({required: true}),
-                email: stringArg({required: true})
+                name: nonNull(stringArg()),
+                email: nonNull(stringArg())
             },
             resolve: async (_parent, args) => {
                 return prisma.client.create({
@@ -111,7 +112,7 @@ const Mutation = mutationType({
             type: 'profile',
             args: {
                 bio:nonNull(stringArg()),
-                client_id: stringArg({required: true}),
+                client_id: nonNull(stringArg()),
             },
             resolve: (_parent, args) => {
                 return prisma.profile.create({
@@ -130,14 +131,14 @@ const Mutation = mutationType({
         t.field('deleteClient', {
             type: 'client',
             args: {
-                id: stringArg({required: true}),
+                id: nonNull(stringArg()),
             },
             resolve:async (_, args) => {
-               await prisma.profile.deleteMany({
-                    where: {
-                        client_id: args.id,
-                    }
-                });
+            //    await prisma.profile.deleteMany({
+            //         where: {
+            //             client_id: args.id,
+            //         }
+            //     });
                return await prisma.client.delete({
                     where: {
                         id: args.id,
@@ -145,12 +146,122 @@ const Mutation = mutationType({
                 });  
             }
         });
+
+        t.field('deleteProfile', {
+            type: 'profile',
+            args: {
+                id: nonNull(stringArg()),
+            },
+            resolve:async (_, args) => {
+               
+               return await prisma.profile.delete({
+                where: {
+                    id: args.id,
+                },
+                   
+                });  
+            }
+        });
+
+        t.field('softDeleteProfile', {
+            type: 'profile',
+            args: {
+                id: nonNull(stringArg()),
+            },
+            resolve:async (_, args) => {
+               
+               return await prisma.profile.update({
+                where: {
+                    id: args.id,
+                },
+                data: {
+                    is_deleted: true,
+                },
+                   
+                });  
+            }
+        });
+
+        t.field('upsert', {
+            type: 'profile',
+            args: {
+                id: nonNull(stringArg()),
+                bio: nonNull(stringArg()),
+                client_id: nonNull(stringArg()),
+                
+            },
+            resolve:async(_, args) => {
+               
+               return await prisma.profile.upsert({
+                where: {
+                    id: args.id,
+                },
+                create: {
+                    
+                    bio:args.bio,
+                    client:{
+                        connect:{
+                            id: args.client_id,
+                        }
+                    }
+                   
+                },
+                update: {
+                    bio:args.bio,
+                    
+                }
+                   
+                });  
+            }
+        });
+
+        // t.field('softDeleteClient', {
+        //     type: 'client',
+        //     args: {
+        //         id: nonNull(stringArg()),
+        //     },
+        //     resolve:async (_, args) => {
+               
+        //        return await prisma.profile.update({
+        //         where: {
+        //             id: args.id,
+        //         },
+        //         data: {
+        //             is_deleted: true,
+        //         },
+                   
+        //         });  
+        //     }
+        // });
+        // t.field('ddd',{
+        //     type:'',
+        //     args:{
+        //         id:,
+        //     },
+        //     resolve:()=>{
+        //         return prisma.profile.update({
+
+        //         })
+        //     }
+
+        // })
     },
 });
+ //👇 rawQuery
 
+// async function d(){
+//     const name = 'siva';
+//     const mail = 'siva12@gmail.com'
+//     const user = await prisma.$queryRaw `INSERT INTO client (id,name, email) VALUES (${'7'},${name},${mail});`;
+//     console.log(user);
+    // seperate code above and below
+//     const user = await prisma.$queryRaw `select*from client`
+//     user.forEach(i => {
+//         console.log(i);
+//     });
 
-
-
+// }
+// d();
 
 
 const schema = makeSchema({
